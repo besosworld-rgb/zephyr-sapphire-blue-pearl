@@ -1,0 +1,36 @@
+{
+  "url": "http://127.0.0.1:8080/play/toast?cut=12",
+  "viewports": {
+    "desktop": {
+      "width": 1280,
+      "height": 800,
+      "status": 200,
+      "title": "Serene",
+      "hasCanvas": true,
+      "bodyTextLen": 432,
+      "bodyTextHash": "7760c96dd791bf5d75d3c73e25b5ecc7efa5c2de30247fd37d628bf2db324ad3",
+      "bodyTextPrefix": "The Toast Sketch · 12 00:00 0% 12 left Drag a piece to its place",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/play-smoke.png"
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "status": 200,
+      "title": "Serene",
+      "hasCanvas": true,
+      "bodyTextLen": 337,
+      "bodyTextHash": "4e06e9c939b96ae5eacf6e863036b1a8e816203addf8278360b7c1d5f90484b0",
+      "bodyTextPrefix": "00:00 0% Rotate Edges HOW THE TABLE WORKS Turn, then seat Pieces",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/play-smoke-mobile.png"
+    }
+  },
+  "brandWarnings": [],
+  "authWarnings": [],
+  "verdictFile": "/workspace/screenshots/play-smoke.json"
+}

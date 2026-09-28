@@ -1,0 +1,1421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Celebration Jigsaw Puzzle</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background: radial-gradient(circle at 50% 10%, #1e1b4b 0%, #0b0f19 55%, #030712 100%);
+      color: #f8fafc;
+      height: 100vh;
+      width: 100vw;
+      overflow: hidden;
+      touch-action: none;
+    }
+
+    .glass {
+      background: rgba(255, 255, 255, 0.05);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+    }
+
+    .glass-tray {
+      background: rgba(15, 23, 42, 0.88);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-top: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    /* Puzzle piece card inside the bottom dock */
+    .piece-card {
+      position: relative;
+      flex-shrink: 0;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1.5px solid rgba(255, 255, 255, 0.12);
+      border-radius: 0.85rem;
+      transition: border-color 0.2s, background 0.2s, transform 0.15s;
+      cursor: grab;
+      touch-action: none;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .piece-card:hover {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(56, 189, 248, 0.6);
+      transform: translateY(-2px);
+    }
+
+    .piece-card.active-selected {
+      background: rgba(56, 189, 248, 0.12);
+      border-color: #38bdf8;
+      box-shadow: 0 0 16px rgba(56, 189, 248, 0.4);
+    }
+
+    .piece-card.empty-placeholder {
+      border-style: dashed;
+      opacity: 0.25;
+      cursor: default;
+      pointer-events: none;
+    }
+
+    /* Actively dragged piece floating layer */
+    #drag-proxy {
+      position: fixed;
+      pointer-events: none;
+      z-index: 99999;
+      display: none;
+      will-change: transform, left, top;
+      filter: drop-shadow(0 20px 25px rgba(0, 0, 0, 0.85)) drop-shadow(0 0 15px rgba(56, 189, 248, 0.8));
+    }
+
+    /* Custom slim scrollbar for piece tray */
+    .custom-scrollbar::-webkit-scrollbar {
+      height: 8px;
+      width: 8px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: rgba(0, 0, 0, 0.3);
+      border-radius: 9999px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.22);
+      border-radius: 9999px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+      background: rgba(56, 189, 248, 0.6);
+    }
+
+    /* Snapping flash animation */
+    @keyframes snapGlow {
+      0% { filter: brightness(1.7) drop-shadow(0 0 25px rgba(56, 189, 248, 1)); }
+      100% { filter: brightness(1) drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3)); }
+    }
+
+    .snap-flash {
+      animation: snapGlow 0.45s ease-out forwards;
+    }
+  </style>
+</head>
+
+<body class="flex flex-col h-screen w-screen overflow-hidden">
+  <header class="w-full px-3 sm:px-6 py-2 glass z-40 flex flex-wrap items-center justify-between gap-2 border-b border-white/10 shrink-0">
+    <div class="flex items-center gap-2.5">
+      <div class="w-8 h-8 rounded-xl bg-gradient-to-tr from-amber-500 via-rose-500 to-indigo-500 flex items-center justify-center shadow-lg shadow-rose-500/25 text-white font-bold text-sm">
+        <i class="fa-solid fa-puzzle-piece"></i>
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <h1 class="text-sm sm:text-base font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-amber-200 via-rose-100 to-sky-200">
+            Serene Jigsaw
+          </h1>
+          <span id="level-badge" class="px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 font-bold border border-sky-500/30 text-[10px]">
+            Level 1 (16)
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Levels Selector (Progressively Unlocked) -->
+    <div class="flex items-center gap-1 bg-slate-900/90 p-1 rounded-xl border border-white/10 shadow-inner">
+      <button id="lvl-1-btn" onclick="selectLevel(1)" class="px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all bg-sky-500 text-white shadow">
+        <i class="fa-solid fa-shapes text-[10px]"></i>
+        <span>16 Pcs</span>
+      </button>
+
+      <button id="lvl-2-btn" onclick="selectLevel(2)" class="px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all text-slate-400 hover:text-white">
+        <i id="lvl-2-icon" class="fa-solid fa-lock text-[9px] text-amber-400"></i>
+        <span>24 Pcs</span>
+      </button>
+
+      <button id="lvl-3-btn" onclick="selectLevel(3)" class="px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all text-slate-400 hover:text-white">
+        <i id="lvl-3-icon" class="fa-solid fa-lock text-[9px] text-amber-400"></i>
+        <span>32 Pcs</span>
+      </button>
+    </div>
+
+    <!-- Stats & Actions -->
+    <div class="flex items-center gap-2">
+      <div class="flex items-center gap-2.5 px-3 py-1 bg-slate-900/80 rounded-xl border border-white/10 text-xs">
+        <div><i class="fa-regular fa-clock text-sky-400 mr-1"></i><span id="timer-display" class="font-mono font-bold">00:00</span></div>
+        <div class="h-3 w-px bg-white/20"></div>
+        <div><i class="fa-solid fa-bullseye text-emerald-400 mr-1"></i><span id="progress-display" class="font-mono font-bold">0%</span></div>
+      </div>
+
+      <!-- Upload Custom Photo -->
+      <label class="px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-md transition-all">
+        <i class="fa-solid fa-camera"></i>
+        <span class="hidden sm:inline">Upload Photo</span>
+        <input type="file" id="photo-file-input" accept="image/*" class="hidden" onchange="handleUserPhotoUpload(event)" />
+      </label>
+
+      <!-- Ghost / Reference toggles -->
+      <button id="ghost-toggle-btn" onclick="toggleGhostGuide()" class="p-2 rounded-xl glass hover:bg-white/15 text-slate-200 transition-all text-xs" title="Toggle Ghost Outline Guide">
+        <i id="ghost-icon" class="fa-regular fa-eye text-sm text-sky-400"></i>
+      </button>
+
+      <button onclick="togglePreviewModal()" class="p-2 rounded-xl glass hover:bg-white/15 text-slate-200 transition-all text-xs" title="View Full Original Photo">
+        <i class="fa-regular fa-image text-sm"></i>
+      </button>
+
+      <button id="sound-btn" onclick="toggleAudio()" class="p-2 rounded-xl glass hover:bg-white/15 text-slate-200 transition-all text-xs" title="Toggle Sound">
+        <i id="sound-icon" class="fa-solid fa-volume-high text-sm"></i>
+      </button>
+
+      <button onclick="restartLevel()" class="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-white/10 transition-all text-xs" title="Reset Current Level">
+        <i class="fa-solid fa-rotate-right text-sm"></i>
+      </button>
+    </div>
+  </header>
+
+  <div class="w-full px-3 sm:px-6 py-1.5 glass flex flex-wrap items-center justify-between text-xs border-b border-white/10 shrink-0 gap-2">
+    <div class="flex items-center gap-2">
+      <span id="piece-status-text" class="text-slate-300 text-xs flex items-center gap-1.5">
+        <i class="fa-solid fa-hand-pointer text-amber-400"></i>
+        <span>Select or drag a piece to its exact matching slot. Piece must be <b>0° (upright)</b> to snap.</span>
+      </span>
+    </div>
+
+    <!-- Active Rotation Controls & Hint -->
+    <div class="flex items-center gap-2">
+      <button id="rot-left-btn" onclick="rotateActivePiece(-90)" disabled class="px-2.5 py-1 rounded-lg bg-slate-800 disabled:opacity-40 hover:bg-slate-700 text-slate-200 border border-white/10 flex items-center gap-1 font-semibold text-xs transition-all">
+        <i class="fa-solid fa-rotate-left text-amber-400"></i> -90°
+      </button>
+
+      <button id="rot-right-btn" onclick="rotateActivePiece(90)" disabled class="px-3 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 disabled:opacity-40 disabled:bg-slate-800 text-slate-950 font-bold flex items-center gap-1.5 shadow-sm text-xs transition-all">
+        <i class="fa-solid fa-rotate-right"></i>
+        <span>Rotate (+90°)</span>
+        <kbd class="hidden md:inline px-1 py-0.5 bg-black/20 rounded text-[10px] font-mono">R</kbd>
+      </button>
+
+      <div class="h-4 w-px bg-white/20 mx-1"></div>
+
+      <button onclick="applyHint()" class="px-3 py-1 rounded-lg glass hover:bg-white/15 text-slate-200 font-semibold text-xs flex items-center gap-1.5 transition-all" title="Instantly solve 1 piece">
+        <i class="fa-solid fa-wand-magic-sparkles text-purple-400"></i>
+        <span>Hint</span>
+      </button>
+    </div>
+  </div>
+
+  <main id="game-stage" class="relative flex-1 w-full overflow-hidden flex flex-col items-center justify-between">
+    <!-- PROMINENT & CENTERED PUZZLE BOARD ZONE -->
+    <div id="board-zone" class="relative w-full flex-1 flex items-center justify-center p-3 sm:p-5 overflow-hidden">
+      <!-- The Big Picture Frame (Centered & strictly proportional to photo 4:3) -->
+      <div id="board-frame" class="relative shadow-2xl rounded-2xl border-2 border-white/20 glass overflow-hidden transition-all duration-300">
+        <!-- Ghost Reference Background -->
+        <div id="ghost-layer" class="absolute inset-0 opacity-20 pointer-events-none transition-opacity duration-300">
+          <canvas id="ghost-canvas" class="w-full h-full object-cover"></canvas>
+        </div>
+
+        <!-- Puzzle Grid Matrix Outline SVG -->
+        <svg id="board-grid-lines" class="absolute inset-0 w-full h-full pointer-events-none z-10"></svg>
+
+        <!-- Dynamic Magnetic Drop Target Indicator -->
+        <div id="board-snap-target" class="absolute pointer-events-none z-15 transition-all duration-150 opacity-0 border-2 rounded-lg"></div>
+
+        <!-- Snapped Finished Pieces Container -->
+        <div id="snapped-container" class="absolute inset-0 z-20 pointer-events-none"></div>
+      </div>
+    </div>
+
+    <footer id="dock-tray" class="w-full glass-tray shrink-0 z-30 flex flex-col border-t border-white/15 shadow-2xl">
+      <!-- Dock Status Bar -->
+      <div class="px-4 py-1.5 bg-slate-900/70 border-b border-white/10 flex items-center justify-between text-xs">
+        <div class="flex items-center gap-2">
+          <i class="fa-solid fa-cubes-stacked text-sky-400"></i>
+          <span class="font-bold uppercase tracking-wider text-slate-200 text-[11px]">Pieces Dock</span>
+          <span id="unsnapped-counter" class="px-2 py-0.5 rounded-full bg-slate-800 text-[11px] text-amber-300 font-mono font-bold border border-white/10">16 remaining</span>
+        </div>
+        <div class="flex items-center gap-3 text-[11px] text-slate-400">
+          <span class="hidden sm:inline"><i class="fa-regular fa-lightbulb text-amber-400 mr-1"></i>Double-click or Right-click a piece to rotate</span>
+          <div class="flex items-center gap-1">
+            <button onclick="scrollTray(-1)" class="w-6 h-6 rounded-lg glass hover:bg-white/20 flex items-center justify-center text-slate-300 transition-colors">
+              <i class="fa-solid fa-chevron-left text-[10px]"></i>
+            </button>
+            <button onclick="scrollTray(1)" class="w-6 h-6 rounded-lg glass hover:bg-white/20 flex items-center justify-center text-slate-300 transition-colors">
+              <i class="fa-solid fa-chevron-right text-[10px]"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Dock Scroll Container: All pieces are guaranteed strictly reachable and cleanly laid out -->
+      <div id="tray-scroll-container" class="w-full overflow-x-auto overflow-y-hidden custom-scrollbar px-4 py-3">
+        <div id="pieces-tray-inner" class="flex items-center gap-3 h-28 sm:h-32 min-w-max">
+          <!-- Dynamic piece cards inserted here -->
+        </div>
+      </div>
+    </footer>
+
+    <!-- Top-level floating drag proxy (no clipping, full screen dragging) -->
+    <div id="drag-proxy"></div>
+  </main>
+
+  <div id="preview-modal" class="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 hidden opacity-0 transition-opacity duration-300">
+    <div class="glass p-5 rounded-3xl max-w-xl w-full flex flex-col items-center border border-white/20 shadow-2xl">
+      <div class="w-full flex items-center justify-between pb-2 mb-3 border-b border-white/10">
+        <div class="flex items-center gap-2">
+          <i class="fa-solid fa-users text-amber-400"></i>
+          <h3 class="font-bold text-sm text-white">Full Celebration Photo</h3>
+        </div>
+        <button onclick="togglePreviewModal()" class="w-7 h-7 rounded-full glass flex items-center justify-center hover:bg-white/20 text-slate-300 hover:text-white transition-colors">
+          <i class="fa-solid fa-xmark text-sm"></i>
+        </button>
+      </div>
+
+      <div class="w-full aspect-[4/3] rounded-xl overflow-hidden shadow-2xl border border-white/15 bg-slate-900">
+        <canvas id="preview-canvas" class="w-full h-full object-cover"></canvas>
+      </div>
+      <p class="text-xs text-slate-300 mt-3 text-center">Use this complete photo to locate friends, smiles, and the toast bottles!</p>
+    </div>
+  </div>
+
+  <div id="win-modal" class="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 hidden opacity-0 transition-opacity duration-300">
+    <div class="glass p-6 sm:p-8 rounded-3xl max-w-md w-full flex flex-col items-center text-center border border-white/20 shadow-2xl">
+      <div class="w-16 h-16 rounded-2xl bg-gradient-to-tr from-amber-400 to-yellow-300 text-amber-950 flex items-center justify-center text-3xl shadow-xl shadow-amber-500/30 mb-3 animate-bounce">
+        <i class="fa-solid fa-trophy"></i>
+      </div>
+
+      <h3 class="text-2xl font-black text-white mb-1">Magnificent Assembly!</h3>
+      <p id="win-subtitle" class="text-amber-200 text-xs mb-5 font-medium">Picture completely assembled!</p>
+
+      <div class="grid grid-cols-2 gap-3 w-full mb-6 bg-slate-900/70 p-3 rounded-2xl border border-white/10 text-left">
+        <div>
+          <span class="text-[10px] uppercase tracking-wider text-slate-400 block font-bold">Total Time</span>
+          <span id="win-time" class="text-base font-bold text-sky-300 font-mono">00:00</span>
+        </div>
+        <div>
+          <span class="text-[10px] uppercase tracking-wider text-slate-400 block font-bold">Total Pieces</span>
+          <span id="win-pieces" class="text-base font-bold text-emerald-300 font-mono">16 / 16</span>
+        </div>
+      </div>
+
+      <div class="flex flex-col sm:flex-row gap-2 w-full">
+        <button onclick="replayCurrentLevel()" class="flex-1 py-2.5 px-4 rounded-xl glass hover:bg-white/15 text-white font-semibold text-xs border border-white/15 transition-all">
+          <i class="fa-solid fa-rotate-right mr-1"></i> Replay
+        </button>
+        <button id="win-next-btn" onclick="goToNextLevel()" class="flex-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 text-white font-bold text-xs shadow-lg shadow-sky-500/25 transition-all">
+          <span>Next Level</span> <i class="fa-solid fa-arrow-right ml-1"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Notification Toast Message -->
+  <div id="toast" class="fixed bottom-36 sm:bottom-40 right-5 z-50 glass px-4 py-2.5 rounded-xl border border-white/20 shadow-2xl flex items-center gap-2.5 transform translate-y-16 opacity-0 pointer-events-none transition-all duration-300">
+    <div id="toast-icon" class="text-sky-400 text-sm"><i class="fa-solid fa-info-circle"></i></div>
+    <span id="toast-text" class="text-xs font-medium text-slate-100">Notification message</span>
+  </div>
+
+  <script>
+    let audioCtx = null;
+    let soundEnabled = true;
+
+    function initAudio() {
+      if (!audioCtx) {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (AudioContext) audioCtx = new AudioContext();
+      }
+      if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+    }
+
+    function playSnapSound() {
+      if (!soundEnabled) return;
+      initAudio();
+      if (!audioCtx) return;
+      try {
+        const now = audioCtx.currentTime;
+        const osc1 = audioCtx.createOscillator();
+        const osc2 = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+
+        osc1.type = 'triangle';
+        osc1.frequency.setValueAtTime(523.25, now);
+        osc1.frequency.exponentialRampToValueAtTime(1046.5, now + 0.1);
+
+        osc2.type = 'sine';
+        osc2.frequency.setValueAtTime(783.99, now);
+        osc2.frequency.exponentialRampToValueAtTime(1567.98, now + 0.12);
+
+        gain.gain.setValueAtTime(0.25, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
+
+        osc1.connect(gain);
+        osc2.connect(gain);
+        gain.connect(audioCtx.destination);
+
+        osc1.start(now);
+        osc2.start(now);
+        osc1.stop(now + 0.16);
+        osc2.stop(now + 0.16);
+      } catch (e) {}
+    }
+
+    function playRotateSound() {
+      if (!soundEnabled) return;
+      initAudio();
+      if (!audioCtx) return;
+      try {
+        const now = audioCtx.currentTime;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(340, now);
+        osc.frequency.exponentialRampToValueAtTime(580, now + 0.05);
+        gain.gain.setValueAtTime(0.12, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(now);
+        osc.stop(now + 0.06);
+      } catch (e) {}
+    }
+
+    function playFanfare() {
+      if (!soundEnabled) return;
+      initAudio();
+      if (!audioCtx) return;
+      [523.25, 659.25, 783.99, 1046.50].forEach((f, i) => {
+        const now = audioCtx.currentTime + i * 0.1;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(f, now);
+        gain.gain.setValueAtTime(0.2, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.38);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(now);
+        osc.stop(now + 0.39);
+      });
+    }
+
+    function toggleAudio() {
+      soundEnabled = !soundEnabled;
+      const icon = document.getElementById('sound-icon');
+      if (soundEnabled) {
+        icon.className = 'fa-solid fa-volume-high text-sm';
+        showToast('Sound enabled', 'fa-solid fa-volume-high');
+        initAudio();
+      } else {
+        icon.className = 'fa-solid fa-volume-xmark text-sm text-slate-400';
+        showToast('Sound muted', 'fa-solid fa-volume-xmark');
+      }
+    }
+
+    const sourceImageCanvas = document.createElement('canvas');
+    const NATIVE_W = 1000;
+    const NATIVE_H = 750; // Standard 4:3 ratio
+    sourceImageCanvas.width = NATIVE_W;
+    sourceImageCanvas.height = NATIVE_H;
+    let ghostVisible = true;
+
+    function drawCelebrationArtwork(ctx, w, h) {
+      // Warm rustic brick background
+      const grad = ctx.createLinearGradient(0, 0, 0, h);
+      grad.addColorStop(0, '#2d1810');
+      grad.addColorStop(0.35, '#4e2a1b');
+      grad.addColorStop(0.7, '#6f3d28');
+      grad.addColorStop(1, '#875138');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, w, h);
+
+      // Stone brick lines
+      ctx.strokeStyle = 'rgba(20, 10, 5, 0.4)';
+      ctx.lineWidth = 2;
+      for (let y = 30; y < 220; y += 22) {
+        const offset = (y % 44 === 0) ? 0 : 25;
+        for (let x = -20 + offset; x < w + 40; x += 60) {
+          ctx.strokeRect(x, y, 56, 18);
+        }
+      }
+
+      // Wooden beam
+      ctx.fillStyle = '#1e110b';
+      ctx.fillRect(0, 0, w, 28);
+
+      // Hanging foliage top left
+      ctx.fillStyle = '#2d5a27';
+      for (let i = 0; i < 35; i++) {
+        ctx.beginPath();
+        const gx = 10 + i * 24 + Math.sin(i) * 10;
+        const gy = 18 + Math.cos(i) * 16;
+        ctx.arc(gx, gy, 12 + (i % 4) * 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Celebratory bunting flags on top right
+      const flagColors = ['#1e40af', '#dc2626', '#ffffff', '#eab308', '#16a34a', '#dc2626'];
+      for (let f = 0; f < 9; f++) {
+        ctx.fillStyle = flagColors[f % flagColors.length];
+        ctx.beginPath();
+        ctx.moveTo(680 + f * 34, 15);
+        ctx.lineTo(670 + f * 34, 230);
+        ctx.lineTo(695 + f * 34, 220);
+        ctx.lineTo(705 + f * 34, 15);
+        ctx.fill();
+      }
+
+      // Arch and TV
+      ctx.fillStyle = '#f8fafc';
+      ctx.beginPath();
+      ctx.arc(170, 220, 150, Math.PI, 0, false);
+      ctx.lineTo(320, 390);
+      ctx.lineTo(20, 390);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.fillStyle = '#38bdf8';
+      ctx.fillRect(390, 85, 75, 110);
+      ctx.fillStyle = '#1e293b';
+      ctx.strokeRect(390, 85, 75, 110);
+
+      // Tablecloth on left
+      ctx.fillStyle = '#f1f5f9';
+      ctx.fillRect(0, 480, 240, 270);
+      ctx.fillStyle = '#facc15';
+      ctx.beginPath(); ctx.arc(70, 630, 10, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#38bdf8';
+      ctx.beginPath(); ctx.arc(95, 615, 9, 0, Math.PI * 2); ctx.fill();
+
+      function drawFace(x, y, s, skin, hair, hairType, shirt, mouthOpen, prop) {
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.scale(s, s);
+
+        ctx.fillStyle = shirt;
+        ctx.beginPath();
+        ctx.ellipse(0, 115, 68, 80, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = skin;
+        ctx.fillRect(-17, 40, 34, 38);
+
+        ctx.fillStyle = hair;
+        ctx.beginPath();
+        ctx.ellipse(0, 10, 45, 50, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = skin;
+        ctx.beginPath();
+        ctx.ellipse(0, 15, 37, 44, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = hair;
+        if (hairType === 'blonde-long') {
+          ctx.beginPath();
+          ctx.ellipse(-24, 25, 18, 55, 0.2, 0, Math.PI * 2);
+          ctx.ellipse(24, 25, 18, 55, -0.2, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (hairType === 'dark-curls') {
+          for (let c = -30; c <= 30; c += 15) {
+            ctx.beginPath();
+            ctx.arc(c, -18, 16, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          ctx.beginPath();
+          ctx.ellipse(34, 35, 22, 70, 0.2, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (hairType === 'short-grey') {
+          ctx.beginPath();
+          ctx.arc(0, -16, 37, Math.PI, 0);
+          ctx.fill();
+        }
+
+        ctx.strokeStyle = '#1e1b18';
+        ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(-13, 6, 7, 0.2 * Math.PI, 0.8 * Math.PI, true); ctx.stroke();
+        ctx.beginPath(); ctx.arc(13, 6, 7, 0.2 * Math.PI, 0.8 * Math.PI, true); ctx.stroke();
+
+        ctx.fillStyle = 'rgba(239, 68, 68, 0.35)';
+        ctx.beginPath(); ctx.arc(-20, 22, 9, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(20, 22, 9, 0, Math.PI * 2); ctx.fill();
+
+        ctx.fillStyle = '#650909';
+        ctx.beginPath();
+        if (mouthOpen) {
+          ctx.ellipse(0, 31, 16, 13, 0, 0, Math.PI);
+        } else {
+          ctx.ellipse(0, 30, 15, 7, 0, 0, Math.PI);
+        }
+        ctx.fill();
+
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath(); ctx.rect(-11, 24, 22, 6); ctx.fill();
+
+        if (prop === 'glasses') {
+          ctx.strokeStyle = '#0f172a';
+          ctx.lineWidth = 4;
+          ctx.strokeRect(-28, -5, 22, 17);
+          ctx.strokeRect(6, -5, 22, 17);
+          ctx.beginPath(); ctx.moveTo(-6, 3); ctx.lineTo(6, 3); ctx.stroke();
+        }
+
+        if (prop === 'bottle') {
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.88)';
+          ctx.strokeStyle = '#38bdf8';
+          ctx.lineWidth = 2;
+          ctx.fillRect(38, -12, 24, 95);
+          ctx.strokeRect(38, -12, 24, 95);
+          ctx.fillStyle = '#fef08a';
+          ctx.fillRect(41, 18, 18, 32);
+        }
+
+        ctx.restore();
+      }
+
+      // Party Group Portrait Placement
+      drawFace(360, 310, 0.8, '#f5d0b5', '#453229', 'short-grey', '#ffffff', true, 'none');
+      drawFace(455, 375, 0.95, '#eec0a0', '#543b2e', 'short-brown', '#d97706', false, 'glasses');
+      drawFace(625, 225, 0.9, '#e4ab8b', '#2b2320', 'short', '#94a3b8', true, 'none');
+      drawFace(735, 275, 0.9, '#f6cfb7', '#dfb072', 'blonde-long', '#ffffff', true, 'none');
+
+      drawFace(275, 435, 1.1, '#eec2a6', '#6b7280', 'short-grey', '#1e3a8a', true, 'none');
+      drawFace(610, 390, 1.05, '#f5c6a5', '#eab308', 'blonde-long', '#15803d', true, 'none');
+      drawFace(540, 555, 1.1, '#edb99a', '#ca8a04', 'blonde-long', '#d97706', true, 'none');
+      drawFace(685, 515, 1.15, '#f3c7ac', '#d97706', 'blonde-long', '#334155', true, 'none');
+
+      // Foreground Characters
+      drawFace(220, 715, 1.5, '#f3c4a2', '#1c1917', 'dark-curls', '#86efac', true, 'glasses');
+      drawFace(360, 615, 1.35, '#eec0a2', '#4b5563', 'short-grey', '#0284c7', true, 'bottle');
+      drawFace(785, 725, 1.35, '#f4c7ab', '#38251e', 'dark-curls', '#f8fafc', true, 'none');
+      drawFace(905, 555, 1.7, '#e4a57f', '#09080b', 'dark-curls', '#f43f5e', true, 'none');
+
+      // Vignette
+      const vig = ctx.createRadialGradient(w/2, h/2, 200, w/2, h/2, 600);
+      vig.addColorStop(0, 'rgba(0,0,0,0)');
+      vig.addColorStop(1, 'rgba(0,0,0,0.3)');
+      ctx.fillStyle = vig;
+      ctx.fillRect(0, 0, w, h);
+    }
+
+    function initMasterPhoto() {
+      const ctx = sourceImageCanvas.getContext('2d');
+      drawCelebrationArtwork(ctx, NATIVE_W, NATIVE_H);
+      refreshCanvasPreviews();
+    }
+
+    function refreshCanvasPreviews() {
+      ['preview-canvas', 'ghost-canvas'].forEach(id => {
+        const c = document.getElementById(id);
+        if (!c) return;
+        c.width = NATIVE_W;
+        c.height = NATIVE_H;
+        const cx = c.getContext('2d');
+        cx.drawImage(sourceImageCanvas, 0, 0);
+      });
+    }
+
+    function handleUserPhotoUpload(event) {
+      const file = event.target.files && event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const ctx = sourceImageCanvas.getContext('2d');
+          ctx.clearRect(0, 0, NATIVE_W, NATIVE_H);
+          ctx.drawImage(img, 0, 0, NATIVE_W, NATIVE_H);
+          refreshCanvasPreviews();
+          showToast('Custom photo loaded!', 'fa-solid fa-camera');
+          startLevel(currentLevel);
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function toggleGhostGuide() {
+      ghostVisible = !ghostVisible;
+      const ghost = document.getElementById('ghost-layer');
+      const icon = document.getElementById('ghost-icon');
+      if (ghostVisible) {
+        ghost.style.opacity = '0.2';
+        icon.className = 'fa-regular fa-eye text-sm text-sky-400';
+        showToast('Ghost preview visible', 'fa-solid fa-eye');
+      } else {
+        ghost.style.opacity = '0';
+        icon.className = 'fa-regular fa-eye-slash text-sm text-slate-400';
+        showToast('Ghost preview hidden', 'fa-solid fa-eye-slash');
+      }
+    }
+
+    function generateJigsawPath(w, h, top, right, bottom, left) {
+      let path = `M 0 0 `;
+
+      // Top edge
+      if (top === 0) {
+        path += `L ${w} 0 `;
+      } else {
+        const sign = top;
+        const tabDepth = (h * 0.22) * -sign;
+        const tabWidth = w * 0.28;
+        const midX = w * 0.5;
+        path += `L ${midX - tabWidth} 0 `;
+        path += `C ${midX - tabWidth * 0.7} ${tabDepth * 0.2}, ${midX - tabWidth * 0.85} ${tabDepth}, ${midX} ${tabDepth} `;
+        path += `C ${midX + tabWidth * 0.85} ${tabDepth}, ${midX + tabWidth * 0.7} ${tabDepth * 0.2}, ${midX + tabWidth} 0 `;
+        path += `L ${w} 0 `;
+      }
+
+      // Right edge
+      if (right === 0) {
+        path += `L ${w} ${h} `;
+      } else {
+        const sign = right;
+        const tabDepth = (w * 0.22) * sign;
+        const tabHeight = h * 0.28;
+        const midY = h * 0.5;
+        path += `L ${w} ${midY - tabHeight} `;
+        path += `C ${w + tabDepth * 0.2} ${midY - tabHeight * 0.7}, ${w + tabDepth} ${midY - tabHeight * 0.85}, ${w + tabDepth} ${midY} `;
+        path += `C ${w + tabDepth} ${midY + tabHeight * 0.85}, ${w + tabDepth * 0.2} ${midY + tabHeight * 0.7}, ${w} ${midY + tabHeight} `;
+        path += `L ${w} ${h} `;
+      }
+
+      // Bottom edge
+      if (bottom === 0) {
+        path += `L 0 ${h} `;
+      } else {
+        const sign = bottom;
+        const tabDepth = (h * 0.22) * sign;
+        const tabWidth = w * 0.28;
+        const midX = w * 0.5;
+        path += `L ${midX + tabWidth} ${h} `;
+        path += `C ${midX + tabWidth * 0.7} ${h + tabDepth * 0.2}, ${midX + tabWidth * 0.85} ${h + tabDepth}, ${midX} ${h + tabDepth} `;
+        path += `C ${midX - tabWidth * 0.85} ${h + tabDepth}, ${midX - tabWidth * 0.7} ${h + tabDepth * 0.2}, ${midX - tabWidth} ${h} `;
+        path += `L 0 ${h} `;
+      }
+
+      // Left edge
+      if (left === 0) {
+        path += `L 0 0 Z`;
+      } else {
+        const sign = left;
+        const tabDepth = (w * 0.22) * -sign;
+        const tabHeight = h * 0.28;
+        const midY = h * 0.5;
+        path += `L 0 ${midY + tabHeight} `;
+        path += `C ${tabDepth * 0.2} ${midY + tabHeight * 0.7}, ${tabDepth} ${midY + tabHeight * 0.85}, ${tabDepth} ${midY} `;
+        path += `C ${tabDepth} ${midY - tabHeight * 0.85}, ${tabDepth * 0.2} ${midY - tabHeight * 0.7}, 0 ${midY - tabHeight} `;
+        path += `L 0 0 Z`;
+      }
+
+      return path;
+    }
+
+    const LEVELS = {
+      1: { id: 1, cols: 4, rows: 4, count: 16, title: 'Level 1: 16 Pieces' },
+      2: { id: 2, cols: 6, rows: 4, count: 24, title: 'Level 2: 24 Pieces' },
+      3: { id: 3, cols: 8, rows: 4, count: 32, title: 'Level 3: 32 Pieces' }
+    };
+
+    let currentLevel = 1;
+    let unlockedLevels = [1];
+    let pieces = [];
+    let selectedPieceId = null;
+    let secondsElapsed = 0;
+    let timerInterval = null;
+    let isComplete = false;
+
+    let boardDimensions = { width: 0, height: 0, cellW: 0, cellH: 0 };
+
+    function loadSavedProgress() {
+      try {
+        const s = localStorage.getItem('serene_jigsaw_unlocked');
+        if (s) {
+          const parsed = JSON.parse(s);
+          if (Array.isArray(parsed) && parsed.includes(1)) {
+            unlockedLevels = parsed;
+          }
+        }
+      } catch (e) {}
+      updateLevelPills();
+    }
+
+    function saveProgress() {
+      try {
+        localStorage.setItem('serene_jigsaw_unlocked', JSON.stringify(unlockedLevels));
+      } catch (e) {}
+    }
+
+    function updateLevelPills() {
+      [1, 2, 3].forEach(l => {
+        const btn = document.getElementById(`lvl-${l}-btn`);
+        const icon = document.getElementById(`lvl-${l}-icon`);
+        const isUnlocked = unlockedLevels.includes(l);
+        const isActive = currentLevel === l;
+
+        if (l > 1 && icon) {
+          icon.className = isUnlocked ? 'fa-solid fa-check text-[9px] text-emerald-400' : 'fa-solid fa-lock text-[9px] text-amber-400';
+        }
+
+        btn.classList.remove('bg-sky-500', 'text-white', 'shadow', 'text-slate-400');
+        if (isActive) {
+          btn.classList.add('bg-sky-500', 'text-white', 'shadow');
+        } else if (isUnlocked) {
+          btn.classList.add('text-slate-200', 'hover:text-white');
+        } else {
+          btn.classList.add('text-slate-400', 'opacity-60');
+        }
+      });
+    }
+
+    function calculateBoardDimensions() {
+      const zone = document.getElementById('board-zone');
+      const padX = window.innerWidth < 640 ? 16 : 32;
+      const padY = window.innerWidth < 640 ? 12 : 24;
+      const availW = zone.clientWidth - padX * 2;
+      const availH = zone.clientHeight - padY * 2;
+
+      let bw = availW;
+      let bh = bw * (3 / 4);
+
+      if (bh > availH) {
+        bh = availH;
+        bw = bh * (4 / 3);
+      }
+
+      boardDimensions.width = Math.floor(bw);
+      boardDimensions.height = Math.floor(bh);
+
+      const cfg = LEVELS[currentLevel];
+      boardDimensions.cellW = boardDimensions.width / cfg.cols;
+      boardDimensions.cellH = boardDimensions.height / cfg.rows;
+
+      const boardFrame = document.getElementById('board-frame');
+      boardFrame.style.width = `${boardDimensions.width}px`;
+      boardFrame.style.height = `${boardDimensions.height}px`;
+    }
+
+    function selectLevel(lvl) {
+      if (!unlockedLevels.includes(lvl)) {
+        showToast(`Complete Level ${lvl - 1} first to unlock!`, 'fa-solid fa-lock');
+        return;
+      }
+      if (currentLevel === lvl && !isComplete) return;
+      startLevel(lvl);
+    }
+
+    function startLevel(lvl) {
+      currentLevel = lvl;
+      updateLevelPills();
+      calculateBoardDimensions();
+
+      const cfg = LEVELS[lvl];
+      document.getElementById('level-badge').innerText = cfg.title;
+
+      secondsElapsed = 0;
+      isComplete = false;
+      selectedPieceId = null;
+      updateActivePieceUI();
+      updateStats();
+      startTimer();
+
+      document.getElementById('snapped-container').innerHTML = '';
+      document.getElementById('board-snap-target').style.opacity = '0';
+
+      // Generate Edge Matrix
+      const hEdges = [];
+      for (let r = 0; r < cfg.rows; r++) {
+        hEdges[r] = [];
+        for (let c = 0; c < cfg.cols - 1; c++) {
+          hEdges[r][c] = Math.random() > 0.5 ? 1 : -1;
+        }
+      }
+
+      const vEdges = [];
+      for (let r = 0; r < cfg.rows - 1; r++) {
+        vEdges[r] = [];
+        for (let c = 0; c < cfg.cols; c++) {
+          vEdges[r][c] = Math.random() > 0.5 ? 1 : -1;
+        }
+      }
+
+      pieces = [];
+      const nativeCellW = NATIVE_W / cfg.cols;
+      const nativeCellH = NATIVE_H / cfg.rows;
+
+      let idx = 0;
+      for (let r = 0; r < cfg.rows; r++) {
+        for (let c = 0; c < cfg.cols; c++) {
+          const top = (r === 0) ? 0 : -vEdges[r - 1][c];
+          const bottom = (r === cfg.rows - 1) ? 0 : vEdges[r][c];
+          const left = (c === 0) ? 0 : -hEdges[r][c - 1];
+          const right = (c === cfg.cols - 1) ? 0 : hEdges[r][c];
+
+          // Randomized starting rotation (0, 90, 180, 270)
+          const rotAngles = [90, 180, 270, 0, 90, 180];
+          const initialRot = rotAngles[Math.floor(Math.random() * rotAngles.length)];
+
+          const pathD = generateJigsawPath(nativeCellW, nativeCellH, top, right, bottom, left);
+
+          pieces.push({
+            id: idx,
+            row: r,
+            col: c,
+            top, right, bottom, left,
+            nativeCellW,
+            nativeCellH,
+            pathD,
+            srcX: c * nativeCellW,
+            srcY: r * nativeCellH,
+            rotation: initialRot,
+            isSnapped: false
+          });
+          idx++;
+        }
+      }
+
+      // Shuffle pieces order for the dock tray
+      pieces.sort(() => Math.random() - 0.5);
+
+      renderBoardGridLines(cfg);
+      renderDockTray();
+    }
+
+    function renderBoardGridLines(cfg) {
+      const svg = document.getElementById('board-grid-lines');
+      svg.setAttribute('viewBox', `0 0 ${NATIVE_W} ${NATIVE_H}`);
+      let html = '';
+      pieces.forEach(p => {
+        html += `<g transform="translate(${p.srcX}, ${p.srcY})">
+          <path d="${p.pathD}" fill="none" stroke="rgba(255,255,255,0.22)" stroke-width="1.8" stroke-dasharray="4,4" />
+        </g>`;
+      });
+      svg.innerHTML = html;
+    }
+
+    function renderDockTray() {
+      const tray = document.getElementById('pieces-tray-inner');
+      tray.innerHTML = '';
+
+      const photoUrl = sourceImageCanvas.toDataURL('image/jpeg', 0.94);
+
+      pieces.forEach(p => {
+        if (p.isSnapped) return;
+
+        const card = document.createElement('div');
+        card.id = `dock-card-${p.id}`;
+        card.className = `piece-card aspect-square h-full p-2 ${selectedPieceId === p.id ? 'active-selected' : ''}`;
+        card.dataset.id = p.id;
+
+        const padX = p.nativeCellW * 0.35;
+        const padY = p.nativeCellH * 0.35;
+        const totalNativeW = p.nativeCellW + padX * 2;
+        const totalNativeH = p.nativeCellH + padY * 2;
+
+        card.innerHTML = `
+          <div class="relative w-full h-full flex items-center justify-center pointer-events-none">
+            <svg id="svg-${p.id}" class="w-full h-full transition-transform duration-200" viewBox="${-padX} ${-padY} ${totalNativeW} ${totalNativeH}" style="overflow: visible; transform: rotate(${p.rotation}deg);">
+              <defs>
+                <clipPath id="clip-${p.id}">
+                  <path d="${p.pathD}" />
+                </clipPath>
+              </defs>
+              <g clip-path="url(#clip-${p.id})">
+                <image href="${photoUrl}" x="${-p.srcX}" y="${-p.srcY}" width="${NATIVE_W}" height="${NATIVE_H}" />
+              </g>
+              <path d="${p.pathD}" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="2" />
+              <path d="${p.pathD}" fill="none" stroke="rgba(0,0,0,0.4)" stroke-width="1" />
+            </svg>
+          </div>
+          <span id="badge-${p.id}" class="absolute bottom-1 right-1 text-[9px] px-1.5 py-0.5 rounded bg-black/70 text-slate-300 font-mono font-bold pointer-events-none border border-white/10">
+            ${p.rotation}°
+          </span>
+        `;
+
+        bindDockPieceEvents(card, p, photoUrl);
+        tray.appendChild(card);
+      });
+
+      updateDockCounter();
+    }
+
+    function scrollTray(dir) {
+      const container = document.getElementById('tray-scroll-container');
+      const offset = 260 * dir;
+      container.scrollBy({ left: offset, behavior: 'smooth' });
+    }
+
+    function updateDockCounter() {
+      const unsnapped = pieces.filter(p => !p.isSnapped).length;
+      document.getElementById('unsnapped-counter').innerText = `${unsnapped} remaining`;
+    }
+
+    function bindDockPieceEvents(card, p, photoUrl) {
+      let isDragging = false;
+      let startX = 0, startY = 0;
+      let hasMoved = false;
+
+      const proxy = document.getElementById('drag-proxy');
+
+      const onPointerDown = (e) => {
+        if (p.isSnapped) return;
+
+        // Double-click/tap detection for immediate rotation
+        const now = Date.now();
+        if (card._lastTap && (now - card._lastTap < 260)) {
+          selectPiece(p.id);
+          rotateActivePiece(90);
+          card._lastTap = 0;
+          return;
+        }
+        card._lastTap = now;
+
+        selectPiece(p.id);
+
+        const pt = e.touches ? e.touches[0] : e;
+        startX = pt.clientX;
+        startY = pt.clientY;
+        hasMoved = false;
+        isDragging = true;
+
+        const padScreenX = boardDimensions.cellW * 0.35;
+        const padScreenY = boardDimensions.cellH * 0.35;
+        const fullScreenW = boardDimensions.cellW + padScreenX * 2;
+        const fullScreenH = boardDimensions.cellH + padScreenY * 2;
+
+        const padNativeX = p.nativeCellW * 0.35;
+        const padNativeY = p.nativeCellH * 0.35;
+        const totalNativeW = p.nativeCellW + padNativeX * 2;
+        const totalNativeH = p.nativeCellH + padNativeY * 2;
+
+        const onPointerMove = (moveEv) => {
+          if (!isDragging) return;
+          if (moveEv.cancelable) moveEv.preventDefault();
+
+          const curPt = moveEv.touches ? moveEv.touches[0] : moveEv;
+          const dist = Math.hypot(curPt.clientX - startX, curPt.clientY - startY);
+
+          if (!hasMoved && dist > 5) {
+            hasMoved = true;
+            card.style.opacity = '0.3';
+
+            // Populate proxy
+            proxy.innerHTML = `
+              <svg viewBox="${-padNativeX} ${-padNativeY} ${totalNativeW} ${totalNativeH}" class="w-full h-full" style="transform: rotate(${p.rotation}deg); overflow: visible;">
+                <defs>
+                  <clipPath id="proxy-clip-${p.id}">
+                    <path d="${p.pathD}" />
+                  </clipPath>
+                </defs>
+                <g clip-path="url(#proxy-clip-${p.id})">
+                  <image href="${photoUrl}" x="${-p.srcX}" y="${-p.srcY}" width="${NATIVE_W}" height="${NATIVE_H}" />
+                </g>
+                <path d="${p.pathD}" fill="none" stroke="rgba(255,255,255,0.7)" stroke-width="2.5" />
+              </svg>
+            `;
+            proxy.style.width = `${fullScreenW}px`;
+            proxy.style.height = `${fullScreenH}px`;
+            proxy.style.display = 'block';
+          }
+
+          if (hasMoved) {
+            // Position proxy centered around cursor
+            const px = curPt.clientX - fullScreenW / 2;
+            const py = curPt.clientY - fullScreenH / 2;
+            proxy.style.left = `${px}px`;
+            proxy.style.top = `${py}px`;
+
+            // Check if hovering over its EXACT target cell on the main board
+            checkExactSlotHover(p, px, py, padScreenX, padScreenY);
+          }
+        };
+
+        const onPointerUp = (upEv) => {
+          if (!isDragging) return;
+          isDragging = false;
+          card.style.opacity = '1';
+
+          window.removeEventListener('mousemove', onPointerMove);
+          window.removeEventListener('touchmove', onPointerMove);
+          window.removeEventListener('mouseup', onPointerUp);
+          window.removeEventListener('touchend', onPointerUp);
+
+          hideSnapTarget();
+          proxy.style.display = 'none';
+          proxy.innerHTML = '';
+
+          if (hasMoved) {
+            const finalPt = upEv.changedTouches ? upEv.changedTouches[0] : upEv;
+            const finalX = finalPt.clientX - fullScreenW / 2;
+            const finalY = finalPt.clientY - fullScreenH / 2;
+
+            // Attempt exact slot snap
+            const snapped = trySnapToExactLocation(p, finalX, finalY, padScreenX, padScreenY, photoUrl);
+
+            // If not snapped, piece cleanly stays in the dock
+            if (!snapped) {
+              // Smooth return feedback
+              card.classList.add('scale-105');
+              setTimeout(() => card.classList.remove('scale-105'), 200);
+            }
+          }
+        };
+
+        window.addEventListener('mousemove', onPointerMove, { passive: false });
+        window.addEventListener('touchmove', onPointerMove, { passive: false });
+        window.addEventListener('mouseup', onPointerUp);
+        window.addEventListener('touchend', onPointerUp);
+      };
+
+      // Right click rotates piece
+      card.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        selectPiece(p.id);
+        rotateActivePiece(90);
+      });
+
+      card.addEventListener('mousedown', onPointerDown);
+      card.addEventListener('touchstart', onPointerDown, { passive: false });
+    }
+
+    function checkExactSlotHover(p, curX, curY, padScreenX, padScreenY) {
+      const boardRect = document.getElementById('board-frame').getBoundingClientRect();
+      // Target top-left coordinate in screen space
+      const exactTargetX = boardRect.left + (p.col * boardDimensions.cellW) - padScreenX;
+      const exactTargetY = boardRect.top + (p.row * boardDimensions.cellH) - padScreenY;
+
+      const dist = Math.hypot(curX - exactTargetX, curY - exactTargetY);
+      const threshold = Math.max(50, boardDimensions.cellW * 0.7);
+
+      if (dist < threshold) {
+        const isUpright = (p.rotation % 360 === 0);
+        showSnapTarget(p, isUpright);
+      } else {
+        hideSnapTarget();
+      }
+    }
+
+    function showSnapTarget(p, isUpright) {
+      const t = document.getElementById('board-snap-target');
+      t.style.left = `${p.col * boardDimensions.cellW}px`;
+      t.style.top = `${p.row * boardDimensions.cellH}px`;
+      t.style.width = `${boardDimensions.cellW}px`;
+      t.style.height = `${boardDimensions.cellH}px`;
+      t.style.opacity = '1';
+
+      if (isUpright) {
+        t.style.borderColor = 'rgba(56, 189, 248, 0.95)';
+        t.style.backgroundColor = 'rgba(56, 189, 248, 0.25)';
+      } else {
+        t.style.borderColor = 'rgba(251, 191, 36, 0.95)';
+        t.style.backgroundColor = 'rgba(251, 191, 36, 0.25)';
+      }
+    }
+
+    function hideSnapTarget() {
+      const t = document.getElementById('board-snap-target');
+      t.style.opacity = '0';
+    }
+
+    function trySnapToExactLocation(p, dropX, dropY, padScreenX, padScreenY, photoUrl) {
+      const boardRect = document.getElementById('board-frame').getBoundingClientRect();
+      const exactTargetX = boardRect.left + (p.col * boardDimensions.cellW) - padScreenX;
+      const exactTargetY = boardRect.top + (p.row * boardDimensions.cellH) - padScreenY;
+
+      const dist = Math.hypot(dropX - exactTargetX, dropY - exactTargetY);
+      const threshold = Math.max(55, boardDimensions.cellW * 0.75);
+
+      if (dist < threshold) {
+        const isUpright = (p.rotation % 360 === 0);
+
+        if (isUpright) {
+          // EXACT MATCH & CORRECT ROTATION: SNAP AND LOCK PERMANENTLY!
+          p.isSnapped = true;
+          p.rotation = 0;
+
+          // Remove piece card completely from dock
+          const card = document.getElementById(`dock-card-${p.id}`);
+          if (card) card.remove();
+
+          // Render locked piece onto the constructed board
+          const padNativeX = p.nativeCellW * 0.35;
+          const padNativeY = p.nativeCellH * 0.35;
+          const totalNativeW = p.nativeCellW + padNativeX * 2;
+          const totalNativeH = p.nativeCellH + padNativeY * 2;
+
+          const snappedDiv = document.createElement('div');
+          snappedDiv.id = `snapped-piece-${p.id}`;
+          snappedDiv.className = 'absolute snap-flash';
+          snappedDiv.style.left = `${(p.col * boardDimensions.cellW) - padScreenX}px`;
+          snappedDiv.style.top = `${(p.row * boardDimensions.cellH) - padScreenY}px`;
+          snappedDiv.style.width = `${boardDimensions.cellW + padScreenX * 2}px`;
+          snappedDiv.style.height = `${boardDimensions.cellH + padScreenY * 2}px`;
+
+          snappedDiv.innerHTML = `
+            <svg viewBox="${-padNativeX} ${-padNativeY} ${totalNativeW} ${totalNativeH}" class="w-full h-full" style="overflow: visible;">
+              <defs>
+                <clipPath id="final-clip-${p.id}">
+                  <path d="${p.pathD}" />
+                </clipPath>
+              </defs>
+              <g clip-path="url(#final-clip-${p.id})">
+                <image href="${photoUrl}" x="${-p.srcX}" y="${-p.srcY}" width="${NATIVE_W}" height="${NATIVE_H}" />
+              </g>
+              <path d="${p.pathD}" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="1.5" />
+              <path d="${p.pathD}" fill="none" stroke="rgba(0,0,0,0.3)" stroke-width="1" />
+            </svg>
+          `;
+
+          document.getElementById('snapped-container').appendChild(snappedDiv);
+
+          playSnapSound();
+
+          if (selectedPieceId === p.id) {
+            selectedPieceId = null;
+            updateActivePieceUI();
+          }
+
+          updateDockCounter();
+          updateStats();
+
+          // Check if board complete
+          if (pieces.every(item => item.isSnapped)) {
+            handleVictory();
+          }
+          return true;
+        } else {
+          showToast('Rotate upright to 0° to fit into its spot!', 'fa-solid fa-arrows-rotate');
+          return false;
+        }
+      }
+      return false;
+    }
+
+    function selectPiece(id) {
+      if (selectedPieceId !== null) {
+        const prev = document.getElementById(`dock-card-${selectedPieceId}`);
+        if (prev) prev.classList.remove('active-selected');
+      }
+
+      selectedPieceId = id;
+      const p = pieces.find(item => item.id === id);
+      if (p && !p.isSnapped) {
+        const el = document.getElementById(`dock-card-${id}`);
+        if (el) el.classList.add('active-selected');
+      }
+      updateActivePieceUI();
+    }
+
+    function updateActivePieceUI() {
+      const p = pieces.find(item => item.id === selectedPieceId);
+      const rL = document.getElementById('rot-left-btn');
+      const rR = document.getElementById('rot-right-btn');
+      const text = document.getElementById('piece-status-text');
+
+      if (p && !p.isSnapped) {
+        rL.disabled = false;
+        rR.disabled = false;
+        const normRot = (p.rotation % 360 + 360) % 360;
+        const isUpright = normRot === 0;
+        text.innerHTML = `<span class="font-bold text-amber-300">Piece #${p.id + 1} Selected</span> — Angle: ${normRot}° (${isUpright ? '<span class="text-emerald-400 font-bold">Ready to place (0°)</span>' : '<span class="text-amber-400 font-bold">Rotate to 0° to fit</span>'})`;
+      } else {
+        rL.disabled = true;
+        rR.disabled = true;
+        text.innerHTML = '<i class="fa-solid fa-hand-pointer text-amber-400 mr-1.5"></i>Select or drag a piece to its exact matching slot. Piece must be <b>0° (upright)</b> to snap.';
+      }
+    }
+
+    function rotateActivePiece(deg) {
+      if (selectedPieceId === null) return;
+      const p = pieces.find(item => item.id === selectedPieceId);
+      if (!p || p.isSnapped) return;
+
+      p.rotation = (p.rotation + deg + 360) % 360;
+      playRotateSound();
+
+      const svgEl = document.getElementById(`svg-${p.id}`);
+      if (svgEl) svgEl.style.transform = `rotate(${p.rotation}deg)`;
+
+      const badge = document.getElementById(`badge-${p.id}`);
+      if (badge) badge.innerText = `${p.rotation}°`;
+
+      updateActivePieceUI();
+    }
+
+    // Keyboard controls
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'r' || e.key === 'R' || e.key === ' ') {
+        e.preventDefault();
+        if (selectedPieceId !== null) rotateActivePiece(90);
+      }
+    });
+
+    function applyHint() {
+      if (isComplete) return;
+      const unsnapped = pieces.filter(p => !p.isSnapped);
+      if (unsnapped.length === 0) return;
+
+      const p = unsnapped[Math.floor(Math.random() * unsnapped.length)];
+      p.rotation = 0;
+
+      const padScreenX = boardDimensions.cellW * 0.35;
+      const padScreenY = boardDimensions.cellH * 0.35;
+      const boardRect = document.getElementById('board-frame').getBoundingClientRect();
+      const targetScreenX = boardRect.left + (p.col * boardDimensions.cellW) - padScreenX;
+      const targetScreenY = boardRect.top + (p.row * boardDimensions.cellH) - padScreenY;
+
+      const photoUrl = sourceImageCanvas.toDataURL('image/jpeg', 0.94);
+      trySnapToExactLocation(p, targetScreenX, targetScreenY, padScreenX, padScreenY, photoUrl);
+      showToast(`Piece #${p.id + 1} solved!`, 'fa-solid fa-wand-magic-sparkles');
+    }
+
+    function handleVictory() {
+      isComplete = true;
+      clearInterval(timerInterval);
+      playFanfare();
+
+      if (typeof confetti === 'function') {
+        confetti({ particleCount: 160, spread: 90, origin: { y: 0.55 } });
+        setTimeout(() => confetti({ particleCount: 120, spread: 110, origin: { y: 0.5 } }), 300);
+      }
+
+      const next = currentLevel + 1;
+      let unlockedNew = false;
+      if (next <= 3 && !unlockedLevels.includes(next)) {
+        unlockedLevels.push(next);
+        saveProgress();
+        updateLevelPills();
+        unlockedNew = true;
+      }
+
+      document.getElementById('win-time').innerText = formatTime(secondsElapsed);
+      document.getElementById('win-pieces').innerText = `${pieces.length} / ${pieces.length}`;
+
+      const nextBtn = document.getElementById('win-next-btn');
+      if (currentLevel < 3) {
+        nextBtn.classList.remove('hidden');
+        nextBtn.innerHTML = `<span>Play Level ${next} (${LEVELS[next].count} pcs)</span> <i class="fa-solid fa-arrow-right ml-1"></i>`;
+        document.getElementById('win-subtitle').innerText = unlockedNew
+          ? `Level ${currentLevel} conquered! Level ${next} is now unlocked!`
+          : `Level ${currentLevel} successfully assembled!`;
+      } else {
+        nextBtn.classList.add('hidden');
+        document.getElementById('win-subtitle').innerText = 'Outstanding! You have mastered all 3 jigsaw levels!';
+      }
+
+      setTimeout(() => {
+        const modal = document.getElementById('win-modal');
+        modal.classList.remove('hidden');
+        setTimeout(() => modal.classList.remove('opacity-0'), 20);
+      }, 400);
+    }
+
+    function goToNextLevel() {
+      closeWinModal();
+      if (currentLevel < 3) selectLevel(currentLevel + 1);
+    }
+
+    function replayCurrentLevel() {
+      closeWinModal();
+      startLevel(currentLevel);
+    }
+
+    function restartLevel() {
+      startLevel(currentLevel);
+      showToast('Level reset', 'fa-solid fa-rotate-right');
+    }
+
+    function closeWinModal() {
+      const modal = document.getElementById('win-modal');
+      modal.classList.add('opacity-0');
+      setTimeout(() => modal.classList.add('hidden'), 300);
+    }
+
+    function togglePreviewModal() {
+      const modal = document.getElementById('preview-modal');
+      if (modal.classList.contains('hidden')) {
+        modal.classList.remove('hidden');
+        setTimeout(() => modal.classList.remove('opacity-0'), 20);
+      } else {
+        modal.classList.add('opacity-0');
+        setTimeout(() => modal.classList.add('hidden'), 300);
+      }
+    }
+
+    function startTimer() {
+      clearInterval(timerInterval);
+      timerInterval = setInterval(() => {
+        secondsElapsed++;
+        document.getElementById('timer-display').innerText = formatTime(secondsElapsed);
+      }, 1000);
+      document.getElementById('timer-display').innerText = formatTime(secondsElapsed);
+    }
+
+    function formatTime(s) {
+      const m = Math.floor(s / 60);
+      const sec = s % 60;
+      return `${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
+    }
+
+    function updateStats() {
+      const total = pieces.length;
+      const snapped = pieces.filter(p => p.isSnapped).length;
+      const pct = total > 0 ? Math.round((snapped / total) * 100) : 0;
+      document.getElementById('progress-display').innerText = `${pct}%`;
+    }
+
+    function showToast(text, iconClass) {
+      const t = document.getElementById('toast');
+      document.getElementById('toast-text').innerText = text;
+      if (iconClass) document.getElementById('toast-icon').innerHTML = `<i class="${iconClass}"></i>`;
+      t.classList.remove('translate-y-16', 'opacity-0', 'pointer-events-none');
+      clearTimeout(window._toastTimer);
+      window._toastTimer = setTimeout(() => {
+        t.classList.add('translate-y-16', 'opacity-0', 'pointer-events-none');
+      }, 2500);
+    }
+
+    window.addEventListener('resize', () => {
+      calculateBoardDimensions();
+      pieces.filter(p => p.isSnapped).forEach(p => {
+        const el = document.getElementById(`snapped-piece-${p.id}`);
+        if (!el) return;
+        const padScreenX = boardDimensions.cellW * 0.35;
+        const padScreenY = boardDimensions.cellH * 0.35;
+        el.style.left = `${(p.col * boardDimensions.cellW) - padScreenX}px`;
+        el.style.top = `${(p.row * boardDimensions.cellH) - padScreenY}px`;
+        el.style.width = `${boardDimensions.cellW + padScreenX * 2}px`;
+        el.style.height = `${boardDimensions.cellH + padScreenY * 2}px`;
+      });
+    });
+
+    window.addEventListener('load', () => {
+      initMasterPhoto();
+      loadSavedProgress();
+      startLevel(1);
+    });
+  </script>
+</body>
+</html>
