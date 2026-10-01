@@ -231,7 +231,7 @@ export function layoutPieces(
     p.z = i;
   }
 
-  const bottomCols = Math.max(3, Math.min(8, Math.ceil(Math.sqrt(bottomCount * 1.8))));
+  const bottomCols = Math.max(3, Math.min(14, Math.ceil(Math.sqrt(bottomCount * 1.8))));
   const startY = boardY + BOARD_H + spacing * 0.62;
   const startX = boardX + BOARD_W / 2 - ((Math.min(bottomCount, bottomCols) - 1) * spacing) / 2;
   let b = 0;

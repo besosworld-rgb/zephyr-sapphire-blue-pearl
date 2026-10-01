@@ -205,13 +205,13 @@ function StudySheet({
   return (
     <div className="fixed inset-0 z-40 flex items-end justify-center bg-bg/80 p-3 sm:items-center sm:p-6">
       <button className="absolute inset-0" aria-label="Close" onClick={onClose} />
-      <div className="modal-enter relative grid w-full max-w-4xl overflow-hidden rounded-xl border border-border bg-surface shadow-2xl md:grid-cols-2">
-        <div className="aspect-[4/3] bg-elevated md:aspect-auto md:min-h-[420px]">
+      <div className="modal-enter relative grid w-full max-w-4xl max-h-[92dvh] overflow-hidden rounded-xl border border-border bg-surface shadow-2xl md:grid-cols-2 md:grid-rows-1">
+        <div className="aspect-[4/3] shrink-0 bg-elevated md:aspect-auto md:h-full md:min-h-0">
           {src ? (
             <img src={src} alt={work.title} className="h-full w-full object-cover" />
           ) : null}
         </div>
-        <div className="relative flex flex-col p-5 sm:p-6">
+        <div className="relative flex min-h-0 flex-col overflow-y-auto p-5 sm:p-6">
           <button
             type="button"
             onClick={onClose}
@@ -221,19 +221,22 @@ function StudySheet({
             <X className="size-4" />
           </button>
           <p className="text-xs uppercase tracking-[0.16em] text-muted">{work.credit}</p>
-          <h2 className="mt-1 font-display text-3xl font-medium tracking-tight">{work.title}</h2>
+          <h2 className="mt-1 pr-8 font-display text-2xl font-medium tracking-tight sm:text-3xl">{work.title}</h2>
           <p className="mt-2 text-sm leading-relaxed text-muted">{work.caption}</p>
-          <p className="mt-4 text-xs leading-relaxed text-subtle">
-            Pieces scatter on the table already rotated. Turn each one upright (0°) and seat it
-            in its exact place. Double-tap, right-click, or press R to rotate.
+          <p className="mt-3 text-xs leading-relaxed text-subtle">
+            Pieces scatter already rotated. Turn each one upright (0°) to seat it. Each sitting
+            keeps a quiet score of its own.
           </p>
-          <div className="mt-6 flex flex-col gap-2">
+          <div className="mt-4 grid grid-cols-1 gap-1.5 pb-2 sm:grid-cols-2">
             {CUTS.map((cut) => (
               <button
                 key={cut.id}
                 type="button"
                 onClick={() => onBegin(cut.id)}
-                className="flex items-center justify-between rounded-md border border-border bg-elevated px-4 py-3 text-left hover:border-accent/40"
+                className={cn(
+                  "flex items-center justify-between rounded-md border border-border bg-elevated px-3 py-2.5 text-left hover:border-accent/40",
+                  cut.id === 120 && "sm:col-span-2",
+                )}
               >
                 <span>
                   <span className="block text-sm font-medium text-fg">{cut.label}</span>

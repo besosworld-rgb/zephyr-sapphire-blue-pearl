@@ -1,4 +1,4 @@
-export type CutId = 12 | 24 | 48;
+export type CutId = 12 | 24 | 48 | 80 | 120;
 
 export type Cut = {
   id: CutId;
@@ -17,10 +17,14 @@ export type Work = {
 };
 
 export const CUTS: Cut[] = [
-  { id: 12, cols: 4, rows: 3, label: "Sketch", note: "Twelve pieces" },
+  { id: 12, cols: 4, rows: 3, label: "Sketch", note: "Twelve pieces — a first look" },
   { id: 24, cols: 6, rows: 4, label: "Study", note: "Twenty-four pieces" },
   { id: 48, cols: 8, rows: 6, label: "Sitting", note: "Forty-eight pieces" },
+  { id: 80, cols: 10, rows: 8, label: "Cabinet", note: "Eighty pieces — a longer evening" },
+  { id: 120, cols: 12, rows: 10, label: "Atelier", note: "One hundred twenty — for patience" },
 ];
+
+export const CUT_IDS: CutId[] = CUTS.map((c) => c.id);
 
 export const WORKS: Work[] = [
   {
@@ -65,6 +69,34 @@ export const WORKS: Work[] = [
     credit: "Salon sitting",
     src: "/puzzles/kites.jpg",
   },
+  {
+    id: "snow",
+    title: "Snow Garden",
+    caption: "A tea house holding its own weather of paper and pine.",
+    credit: "Salon sitting",
+    src: "/puzzles/snow.jpg",
+  },
+  {
+    id: "olives",
+    title: "Olive Slope",
+    caption: "Silver leaves and a stone wall, late in the afternoon.",
+    credit: "Salon sitting",
+    src: "/puzzles/olives.jpg",
+  },
+  {
+    id: "studio",
+    title: "North Light",
+    caption: "An empty studio, waiting on the next sitting.",
+    credit: "Salon sitting",
+    src: "/puzzles/studio.jpg",
+  },
+  {
+    id: "court",
+    title: "Moon Court",
+    caption: "Tiles, oranges, and a fountain keeping the night.",
+    credit: "Salon sitting",
+    src: "/puzzles/court.jpg",
+  },
 ];
 
 export const CUSTOM_WORK: Work = {
@@ -81,5 +113,5 @@ export function getWork(id: string): Work | undefined {
 }
 
 export function getCut(id: number): Cut {
-  return CUTS.find((c) => c.id === id) ?? CUTS[1];
+  return CUTS.find((c) => c.id === id) ?? CUTS[1]!;
 }

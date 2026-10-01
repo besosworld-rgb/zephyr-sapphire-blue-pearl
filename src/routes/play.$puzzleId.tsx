@@ -3,16 +3,17 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { PuzzleCanvas } from "@/components/puzzle/PuzzleCanvas";
 import { PlayHud } from "@/components/puzzle/PlayHud";
 import { Button } from "@/components/ui/button";
-import { CUTS, getCut, getWork, type CutId } from "@/lib/puzzle/catalog";
+import { CUTS, CUT_IDS, getCut, getWork, type CutId } from "@/lib/puzzle/catalog";
 import { loadCustomImage } from "@/lib/puzzle/photo";
 import { loadSave, markHelpSeen, patchSettings, recordBest } from "@/lib/puzzle/save";
+import { startScore, stopScore, unlockAudio } from "@/lib/puzzle/audio";
 import { formatTime } from "@/lib/utils";
 import type { HudSnapshot, PuzzleHandle } from "@/lib/puzzle/types";
 
 export const Route = createFileRoute("/play/$puzzleId")({
   validateSearch: (s: Record<string, unknown>) => {
     const cut = Number(s.cut);
-    return { cut: ([12, 24, 48] as number[]).includes(cut) ? (cut as CutId) : (24 as CutId) };
+    return { cut: CUT_IDS.includes(cut as CutId) ? (cut as CutId) : (24 as CutId) };
   },
   component: PlayPage,
 });
@@ -69,6 +70,12 @@ function PlayPage() {
       setSrc(work.src);
     }
     setReady(true);
+  }, [work]);
+
+  useEffect(() => {
+    if (!work) return;
+    startScore(work.id);
+    return () => stopScore();
   }, [work]);
 
   useEffect(() => {
@@ -187,10 +194,12 @@ function PlayPage() {
               <li>A piece only settles when it is upright (0°) and over its exact slot.</li>
               <li>Rotate with R, right-click, or a double-tap. Hold Space to study the picture.</li>
               <li>Scroll to zoom. Drag empty linen to pan. Edges hides the interiors.</li>
+              <li>A quiet score belongs to the picture. Mute it from the top bar if you prefer silence.</li>
             </ul>
             <Button
               className="mt-6 w-full"
               onClick={() => {
+                unlockAudio();
                 markHelpSeen();
                 setHelp(false);
               }}
